@@ -138,7 +138,7 @@ DispReturn:
 
 
 ; ------------------------------------------------------------------------
-; Ä´濽±´£¬·Âmemcpy, ´Ó´µØ· pSrc ¿½±´iSize ×½ÚÚݵ½ ĿµĵØ· pDest
+; 内存拷贝，仿 memcpy, 从源地址 pSrc 拷贝iSize 字节内容到 目的地址 pDest
 ; ------------------------------------------------------------------------
 ; void* MemCpy(void* es:pDest, void* ds:pSrc, int iSize);
 ; ------------------------------------------------------------------------
@@ -154,16 +154,19 @@ MemCpy:
 	mov	esi, [ebp + 12]	; Source
 	mov	ecx, [ebp + 16]	; Counter
 .1:
-	cmp	ecx, 0		; Å¶ϼÆýz	.2		; ¼ÆýãÌ³ömov	al, [ds:esi]		; ©· ԴµØ·´¦µÄµ -> al
-	inc	esi			; ©§
-					; ©ÇÖ×½Úƶ¯
-	mov	byte [es:edi], al	; ©§
-	inc	edi			; ©¿
+	cmp	ecx, 0		; 判断计数器
+	jz	.2		; 计数器为零时跳出
 
-	dec	ecx		; ¼Æý»
-	jmp	.1		; ѭ»·
+	mov	al, [ds:esi]		; ┓ 源地址处的值 -> al
+	inc	esi			; ┃
+					; ┣ 逐字节移动
+	mov	byte [es:edi], al	; ┃
+	inc	edi			; ┛
+
+	dec	ecx		; 计数器减一
+	jmp	.1		; 循环
 .2:
-	mov	eax, [ebp + 8]	; ·µ»Øµ
+	mov	eax, [ebp + 8]	; 返回值
 
 	pop	ecx
 	pop	edi
@@ -171,4 +174,6 @@ MemCpy:
 	mov	esp, ebp
 	pop	ebp
 
-	ret			; º¯Ê½á£¬·µ»Ø; MemCpy ½á-------------------------------------------------------------
+	ret			; 函数结束，返回
+; MemCpy 结束-------------------------------------------------------------
+
