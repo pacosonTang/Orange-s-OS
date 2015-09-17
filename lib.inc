@@ -136,3 +136,39 @@ DispReturn:
 	ret
 ;; DispReturn 结束
 
+
+; ------------------------------------------------------------------------
+; Ä´濽±´£¬·Âmemcpy, ´Ó´µØ· pSrc ¿½±´iSize ×½ÚÚݵ½ ĿµĵØ· pDest
+; ------------------------------------------------------------------------
+; void* MemCpy(void* es:pDest, void* ds:pSrc, int iSize);
+; ------------------------------------------------------------------------
+MemCpy:
+	push	ebp
+	mov	ebp, esp
+
+	push	esi
+	push	edi
+	push	ecx
+
+	mov	edi, [ebp + 8]	; Destination
+	mov	esi, [ebp + 12]	; Source
+	mov	ecx, [ebp + 16]	; Counter
+.1:
+	cmp	ecx, 0		; Å¶ϼÆýz	.2		; ¼ÆýãÌ³ömov	al, [ds:esi]		; ©· ԴµØ·´¦µÄµ -> al
+	inc	esi			; ©§
+					; ©ÇÖ×½Úƶ¯
+	mov	byte [es:edi], al	; ©§
+	inc	edi			; ©¿
+
+	dec	ecx		; ¼Æý»
+	jmp	.1		; ѭ»·
+.2:
+	mov	eax, [ebp + 8]	; ·µ»Øµ
+
+	pop	ecx
+	pop	edi
+	pop	esi
+	mov	esp, ebp
+	pop	ebp
+
+	ret			; º¯Ê½á£¬·µ»Ø; MemCpy ½á-------------------------------------------------------------
