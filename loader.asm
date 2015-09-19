@@ -732,20 +732,21 @@ InitKernel:
 													; 此时的 esi 指向 程序头表的基地址
 													;
 .Begin:
-        mov   eax, [esi + 0]						
-        cmp   eax, 0                     			; PT_NULL
+        mov   eax, [esi + 0]      
+        cmp   eax, 0                         ; PT_NULL
         jz    .NoAction
-        push  dword [esi + 010h]    				; length压栈; 由程序头的数据结构知，offset(16)：p_filesz : 段在文件中的长度；length(4)
-        mov   eax, [esi + 04h]            			; 由程序头的数据结构知，offset(4)：p_offset: 段的第一个字节在文件中的 偏移；length(4)
-        add   eax, BaseOfKernelFilePhyAddr			; BaseOfKernelFilePhyAddr=080000h,故eax->段的第一个字节在物理内存中的地址（物理地址）
-        push  eax		    						; src_addr 压栈; 将该程序头所描述段在物理内存中的基地址压栈；
-        push  dword [esi + 08h]     				; des_addr 压栈; offset(8)：p_vaddr: 段的第一个字节在内存中的虚拟地址；length(4),压栈
-        call  MemCpy                      			; void* MemCpy(void* es:pDest, void* ds:pSrc, int iSize);
-        add   esp, 12                     			; 为什么es:pDest= 0x30400 ?
+        push  dword [esi + 010h]    	 ; length压栈; 由程序头的数据结构知，offset(16)：p_filesz : 段在文件中的长度；length(4)=40Dh
+        mov   eax, [esi + 04h]            	 ; 由程序头的数据结构知，offset(4)：p_offset: 段的第一个字节在文件中的 偏移；length(4)=0H
+        add   eax, BaseOfKernelFilePhyAddr	 ; BaseOfKernelFilePhyAddr=080000h,故eax->段的第一个字节在物理内存中的地址（物理地址）
+        push  eax                            ; src_addr 压栈; 将该程序头所描述段在物理内存中的基地址压栈；
+        push  dword [esi + 08h]     		; des_addr 压栈; offset(8)：p_vaddr: 段的第一个字节在内存中的虚拟地址；length(4)=30000H，这个是干货地址，最重要。
+											; 对于这个干货地址，建议参见原书 p139 ;
+        call  MemCpy                      	 ; void* MemCpy(void* es:pDest, void* ds:pSrc, int iSize);
+        add   esp, 12                      
 .NoAction:
-        add   esi, 020h                			    ; esi 指向下一个程序头，每个从程序头32字节；
+        add   esi, 020h                	    ; esi 指向下一个程序头，每个从程序头32字节；
         dec   ecx
-        jnz   .Begin					
+        jnz   .Begin     
 
         ret
 ; InitKernel ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
