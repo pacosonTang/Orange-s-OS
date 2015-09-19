@@ -1,5 +1,4 @@
 
-
 org  0100h
 
 	jmp	LABEL_START		; Start
@@ -21,6 +20,7 @@ LABEL_DESC_VIDEO:		Descriptor	 0B8000h,               0ffffh, DA_DRW            
 GdtLen		equ	$ - LABEL_GDT
 GdtPtr		dw	GdtLen - 1				; 段界限
 		dd	BaseOfLoaderPhyAddr + LABEL_GDT		; 基地址
+; BaseOfLoaderPhyAddr	equ	BaseOfLoader * 10h	, BaseOfLoader equ 09000h;
 
 ; GDT 选择子 ----------------------------------------------------------------------------------
 SelectorFlatC		equ	LABEL_DESC_FLAT_C	- LABEL_GDT
@@ -126,6 +126,8 @@ LABEL_FILENAME_FOUND:			; 找到 KERNEL.BIN 后便来到这里继续
 	push	cx			; 保存此 Sector 在 FAT 中的序号
 	add	cx, ax
 	add	cx, DeltaSectorNo	; 这时 cl 里面是 LOADER.BIN 的起始扇区号 (从 0 开始数的序号)
+	; BaseOfKernelFile	equ	 08000h	; KERNEL.BIN 被加载到的位置 ----  段地址
+	; OffsetOfKernelFile	equ	     0h	; KERNEL.BIN 被加载到的位置 ---- 偏移地址
 	mov	ax, BaseOfKernelFile
 	mov	es, ax			; es <- BaseOfKernelFile
 	mov	bx, OffsetOfKernelFile	; bx <- OffsetOfKernelFile	于是, es:bx = BaseOfKernelFile:OffsetOfKernelFile = BaseOfKernelFile * 10h + OffsetOfKernelFile
@@ -163,7 +165,7 @@ LABEL_FILE_LOADED:
 ; 下面准备跳入保护模式 -------------------------------------------
 
 ; 加载 GDTR
-	lgdt	[GdtPtr]
+	lgdt	[GdtPtr] ; GdtPtr 基地址为 0x090000
 
 ; 关中断
 	cli
@@ -177,6 +179,10 @@ LABEL_FILE_LOADED:
 	mov	eax, cr0
 	or	eax, 1
 	mov	cr0, eax
+
+; BaseOfLoader		equ	 09000h	; LOADER.BIN 被加载到的位置 ----  段地址
+; OffsetOfLoader		equ	  0100h	; LOADER.BIN 被加载到的位置 ---- 偏移地址
+; BaseOfLoaderPhyAddr	equ	BaseOfLoader * 10h	; LOADER.BIN 被加载到的位置 ---- 物理地址 (= BaseOfLoader * 10h)
 
 ; 真正进入保护模式
 	jmp	dword SelectorFlatC:(BaseOfLoaderPhyAddr+LABEL_PM_START)
@@ -669,6 +675,9 @@ SetupPaging:
 
 	; 为简化处理, 所有线性地址对应相等的物理地址. 并且不考虑内存空洞.
 
+		
+; PageDirBase		equ	200000h	; 页目录开始地址:		2M
+; PageTblBase		equ	201000h	; 页表开始地址:			2M + 4K
 	; 首先初始化页目录
 	mov	ax, SelectorFlatRW
 	mov	es, ax
@@ -712,26 +721,31 @@ SetupPaging:
 ; 遍历每一个 Program Header，根据 Program Header 中的信息来确定把什么放进内存，放到什么位置，以及放多少。
 ; --------------------------------------------------------------------------------------------
 InitKernel:
+		
+		; 必须引起注意的是：在重新放置内核过程中，MemCpy 的目的地址 是由 ld 链接文件的参数 -Ttext 指定的，如指定为 0x30400
+		; BaseOfKernelFilePhyAddr equ BaseOfKernelFile * 10h ; = 080000h
         xor   esi, esi
-        mov   cx, word [BaseOfKernelFilePhyAddr+2Ch];`. ecx <- pELFHdr->e_phnum
-        movzx ecx, cx                               ;/
-        mov   esi, [BaseOfKernelFilePhyAddr + 1Ch]  ; esi <- pELFHdr->e_phoff
-        add   esi, BaseOfKernelFilePhyAddr;esi<-OffsetOfKernel+pELFHdr->e_phoff
+        mov   cx, word [BaseOfKernelFilePhyAddr+2Ch]; offset(44) Elf32_Half e_phnum; Program header table 有多少个条目
+        movzx ecx, cx	                            ; ecx 低16位=cx，高16位=0
+        mov   esi, [BaseOfKernelFilePhyAddr + 1Ch]  ; offset(28) Elf32_Off e_phoff; 程序头表（program header table）在文件中的偏移量
+        add   esi, BaseOfKernelFilePhyAddr			; esi<-OffsetOfKernel + pELFHdr->e_phoff
+													; 此时的 esi 指向 程序头表的基地址
+													;
 .Begin:
-        mov   eax, [esi + 0]
-        cmp   eax, 0                      ; PT_NULL
+        mov   eax, [esi + 0]						
+        cmp   eax, 0                     			; PT_NULL
         jz    .NoAction
-        push  dword [esi + 010h]    ;size ;`.
-        mov   eax, [esi + 04h]            ; |
-        add   eax, BaseOfKernelFilePhyAddr; | memcpy((void*)(pPHdr->p_vaddr),
-        push  eax		    ;src  ; |      uchCode + pPHdr->p_offset,
-        push  dword [esi + 08h]     ;dst  ; |      pPHdr->p_filesz;
-        call  MemCpy                      ; |
-        add   esp, 12                     ;/
+        push  dword [esi + 010h]    				; length压栈; 由程序头的数据结构知，offset(16)：p_filesz : 段在文件中的长度；length(4)
+        mov   eax, [esi + 04h]            			; 由程序头的数据结构知，offset(4)：p_offset: 段的第一个字节在文件中的 偏移；length(4)
+        add   eax, BaseOfKernelFilePhyAddr			; BaseOfKernelFilePhyAddr=080000h,故eax->段的第一个字节在物理内存中的地址（物理地址）
+        push  eax		    						; src_addr 压栈; 将该程序头所描述段在物理内存中的基地址压栈；
+        push  dword [esi + 08h]     				; des_addr 压栈; offset(8)：p_vaddr: 段的第一个字节在内存中的虚拟地址；length(4),压栈
+        call  MemCpy                      			; void* MemCpy(void* es:pDest, void* ds:pSrc, int iSize);
+        add   esp, 12                     			; 为什么es:pDest= 0x30400 ?
 .NoAction:
-        add   esi, 020h                   ; esi += pELFHdr->e_phentsize
+        add   esi, 020h                			    ; esi 指向下一个程序头，每个从程序头32字节；
         dec   ecx
-        jnz   .Begin
+        jnz   .Begin					
 
         ret
 ; InitKernel ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
