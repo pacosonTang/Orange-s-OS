@@ -17,7 +17,6 @@ LABEL_DESC_CODE32: Descriptor       0,  SegCode32Len - 1, DA_C + DA_32	; 非一�
 LABEL_DESC_CODE16: Descriptor       0,            0ffffh, DA_C		; 非一致代码段, 16
 LABEL_DESC_DATA:   Descriptor       0,       DataLen - 1, DA_DRW+DA_DPL1	; Data
 LABEL_DESC_STACK:  Descriptor       0,        TopOfStack, DA_DRWA + DA_32; Stack, 32 位
-; Mine【在GDT中添加表项 局部描述符 LABEL_DESC_LDT，而 LABEL_DESC_LDT 也作为描述符表】
 LABEL_DESC_LDT:    Descriptor       0,        LDTLen - 1, DA_LDT	; LDT
 LABEL_DESC_VIDEO:  Descriptor 0B8000h,            0ffffh, DA_DRW	; 显存首地址
 ; GDT 结束
@@ -32,7 +31,7 @@ SelectorCode32		equ	LABEL_DESC_CODE32	- LABEL_GDT
 SelectorCode16		equ	LABEL_DESC_CODE16	- LABEL_GDT
 SelectorData		equ	LABEL_DESC_DATA		- LABEL_GDT
 SelectorStack		equ	LABEL_DESC_STACK	- LABEL_GDT
-SelectorLDT		    equ	LABEL_DESC_LDT		- LABEL_GDT		; Mine【SelectorLDT 是重头戏哦】
+SelectorLDT		equ	LABEL_DESC_LDT		- LABEL_GDT
 SelectorVideo		equ	LABEL_DESC_VIDEO	- LABEL_GDT
 ; END of [SECTION .gdt]
 
@@ -46,8 +45,7 @@ PMMessage:		db	"In Protect Mode now. ^-^", 0	; 进入保护模式后显示此字
 OffsetPMMessage		equ	PMMessage - $$
 StrTest:		db	"ABCDEFGHIJKLMNOPQRSTUVWXYZ", 0
 OffsetStrTest		equ	StrTest - $$
-; intial: DataLen			equ	$ - LABEL_DATA
-DataLen			equ	$ - $$
+DataLen			equ	$ - LABEL_DATA
 ; END of [SECTION .data1]
 
 
@@ -58,7 +56,7 @@ ALIGN	32
 LABEL_STACK:
 	times 512 db 0
 
-TopOfStack	equ	$ - $$ - 1
+TopOfStack	equ	$ - LABEL_STACK - 1
 
 ; END of [SECTION .gs]
 
@@ -75,9 +73,9 @@ LABEL_BEGIN:
 	mov	[LABEL_GO_BACK_TO_REAL+3], ax
 	mov	[SPValueInRealMode], sp
 
-	; 初始化 16 位代码段描述符 ; Mine【为什么会有 16位代码段LABEL_SEG_CODE16，因为CPU从保护模式返回到实模式，只能从16位代码段中返回 】
+	; 初始化 16 位代码段描述符
 	mov	ax, cs
-	movzx	eax, ax		; Mine【movzx，无符号扩展传送指令；MOVZX AX,BL 运行完以上汇编语句之后，AX的值为0080H。】
+	movzx	eax, ax
 	shl	eax, 4
 	add	eax, LABEL_SEG_CODE16
 	mov	word [LABEL_DESC_CODE16 + 2], ax
@@ -85,7 +83,7 @@ LABEL_BEGIN:
 	mov	byte [LABEL_DESC_CODE16 + 4], al
 	mov	byte [LABEL_DESC_CODE16 + 7], ah
 
-	; 初始化 32 位代码段描述符  ; Mine【32位代码段，用于CPU运行在保护模式下】
+	; 初始化 32 位代码段描述符
 	xor	eax, eax
 	mov	ax, cs
 	shl	eax, 4
@@ -95,7 +93,7 @@ LABEL_BEGIN:
 	mov	byte [LABEL_DESC_CODE32 + 4], al
 	mov	byte [LABEL_DESC_CODE32 + 7], ah
 
-	; 初始化数据段描述符    ; Mine【数据段用于存储程序运行所需要的数据】
+	; 初始化数据段描述符
 	xor	eax, eax
 	mov	ax, ds
 	shl	eax, 4
@@ -105,7 +103,7 @@ LABEL_BEGIN:
 	mov	byte [LABEL_DESC_DATA + 4], al
 	mov	byte [LABEL_DESC_DATA + 7], ah
 
-	; 初始化堆栈段描述符   ; Mine【因为CPU运行在32位代码段中的堆栈操作必须 在新的堆栈段中进行】
+	; 初始化堆栈段描述符
 	xor	eax, eax
 	mov	ax, ds
 	shl	eax, 4
@@ -115,8 +113,7 @@ LABEL_BEGIN:
 	mov	byte [LABEL_DESC_STACK + 4], al
 	mov	byte [LABEL_DESC_STACK + 7], ah
 
-	
-	; 初始化 LDT 在 GDT 中的描述符 ；Mine【 LABEL_DESC_LDT 作为GDT的表项】
+	; 初始化 LDT 在 GDT 中的描述符
 	xor	eax, eax
 	mov	ax, ds
 	shl	eax, 4
@@ -126,7 +123,7 @@ LABEL_BEGIN:
 	mov	byte [LABEL_DESC_LDT + 4], al
 	mov	byte [LABEL_DESC_LDT + 7], ah
 
-	; 初始化 LDT 中的描述符 ; Mine【初始化LDT的基地址所指向的具体的多任务代码段】
+	; 初始化 LDT 中的描述符
 	xor	eax, eax
 	mov	ax, ds
 	shl	eax, 4
@@ -206,7 +203,7 @@ LABEL_SEG_CODE32:
 	mov	edi, (80 * 10 + 0) * 2	; 目的数据偏移。屏幕第 10 行, 第 0 列。
 	cld
 .1:
-	lodsb	; Mine【lodsb、lodsw：把DS:SI指向的存储单元中的数据装入AL或AX，然后根据DF标志增减SI】
+	lodsb
 	test	al, al
 	jz	.2
 	mov	[gs:edi], ax
@@ -216,10 +213,9 @@ LABEL_SEG_CODE32:
 
 	call	DispReturn
 
-	; Mine【这里的LDT选择子索引的是LDT中记录的描述符表项的基地址值，即具体任务的执行代码】
 	; Load LDT
-	mov	ax, SelectorLDT ; 
-	lldt	ax		; Mine【lldt 负责 加载ldtr， 它的操作数是一个选择子，这个选择子对应的就是用来描述LDT的那个描述符LABEL_DESC_LDT】
+	mov	ax, SelectorLDT
+	lldt	ax
 
 	jmp	SelectorLDTCodeA:0	; 跳入局部任务
 
@@ -269,6 +265,7 @@ Code16Len	equ	$ - LABEL_SEG_CODE16
 
 ; END of [SECTION .s16code]
 
+
 ; LDT
 [SECTION .ldt]
 ALIGN	32
@@ -281,6 +278,7 @@ LDTLen		equ	$ - LABEL_LDT
 ; LDT 选择子
 SelectorLDTCodeA	equ	LABEL_LDT_DESC_CODEA	- LABEL_LDT + SA_TIL
 ; END of [SECTION .ldt]
+
 
 ; CodeA (LDT, 32 位代码段)
 [SECTION .la]
