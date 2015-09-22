@@ -3,6 +3,7 @@
 ; 编译方法：nasm pmtest5c.asm -o pmtest5c.com
 ; ==========================================
 
+
 %include	"pm.inc"	; 常量, 宏, 以及一些说明
 
 org	0100h
