@@ -8,7 +8,6 @@
 #ifndef	_ORANGES_TYPE_H_
 #define	_ORANGES_TYPE_H_
 
-
 typedef	unsigned long long	u64;
 typedef	unsigned int		u32;
 typedef	unsigned short		u16;
@@ -43,8 +42,8 @@ struct mess3 {
 	int	m3i2;
 	int	m3i3;
 	int	m3i4;
-	long long	m3l1;
-	long long 	m3l2;
+	unsigned long long	m3l1;
+	unsigned long long	m3l2;
 	void*	m3p1;
 	void*	m3p2;
 };
@@ -58,5 +57,5 @@ typedef struct {
 	} u;
 } MESSAGE;
 
+#endif
 
-#endif /* _ORANGES_TYPE_H_ */

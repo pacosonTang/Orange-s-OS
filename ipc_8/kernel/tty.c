@@ -33,6 +33,7 @@ PUBLIC void task_tty()
 
 	/* panic("in TTY"); */
 	/* assert(0); */
+	assert(0);
 
 	init_keyboard();
 
